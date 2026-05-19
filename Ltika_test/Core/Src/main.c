@@ -37,6 +37,19 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+/*
+ * ADC 阈值：高于此值 = 感光管检测到黑线
+ * 典型 TCRT5000 上拉电路：黑色吸收红外 → 光电管截止 → 集电极高电平 → 高 ADC 值
+ * 若实际极性相反（白线返回高值），将比较方向改为 <
+ */
+#define BLACK_THRESHOLD  2000
+
+/* 电机 PWM 速度（0 ~ 1000，对应 TIM1 Period = 1000） */
+#define SPEED_BASE   650    /* 直行速度            */
+#define SPEED_FAST   850    /* 转弯时外侧轮速度     */
+#define SPEED_SLOW   150    /* 转弯时内侧轮速度     */
+#define SPEED_SPIN   500    /* 急转弯原地旋转速度   */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,16 +61,76 @@
 
 /* USER CODE BEGIN PV */
 
+/*
+ * DMA 持续将 ADC1 四通道结果写入此缓冲区（12 位，0~4095）：
+ *   adc_buf[0]  PA0  → ADC1_IN1   最左侧传感器
+ *   adc_buf[1]  PA1  → ADC1_IN2   左中传感器
+ *   adc_buf[2]  PA3  → ADC1_IN4   右中传感器
+ *   adc_buf[3]  PB0  → ADC1_IN11  最右侧传感器
+ */
+volatile uint16_t adc_buf[4];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+static void Motor_Drive(int16_t leftPWM, int16_t rightPWM);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/**
+ * 驱动两个电机。
+ * leftPWM / rightPWM：-1000（全速后退）~ +1000（全速前进），0 = 停止。
+ *
+ * 引脚对应关系（见 main.h / gpio.c）：
+ *   左轮  Motor A：AIN1 = PF0，AIN2 = PF1，PWM = PA8（TIM1_CH1）
+ *   右轮  Motor B：BIN1 = PB1，BIN2 = PA10，PWM = PA9（TIM1_CH2）
+ *
+ * 若小车运动方向与预期相反，交换 leftPWM / rightPWM 参数，
+ * 或将对应电机的 xIN1 / xIN2 逻辑对调即可。
+ */
+static void Motor_Drive(int16_t leftPWM, int16_t rightPWM)
+{
+    /* 限幅 */
+    if (leftPWM  >  1000) leftPWM  =  1000;
+    if (leftPWM  < -1000) leftPWM  = -1000;
+    if (rightPWM >  1000) rightPWM =  1000;
+    if (rightPWM < -1000) rightPWM = -1000;
+
+    /* 左轮（Motor A） */
+    if (leftPWM > 0) {
+        HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_RESET);
+    } else if (leftPWM < 0) {
+        HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_SET);
+        leftPWM = -leftPWM;
+    } else {
+        HAL_GPIO_WritePin(AIN1_GPIO_Port, AIN1_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(AIN2_GPIO_Port, AIN2_Pin, GPIO_PIN_RESET);
+    }
+
+    /* 右轮（Motor B） */
+    if (rightPWM > 0) {
+        HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
+    } else if (rightPWM < 0) {
+        HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_SET);
+        rightPWM = -rightPWM;
+    } else {
+        HAL_GPIO_WritePin(BIN1_GPIO_Port, BIN1_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(BIN2_GPIO_Port, BIN2_Pin, GPIO_PIN_RESET);
+    }
+
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, (uint32_t)leftPWM);
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, (uint32_t)rightPWM);
+}
 
 /* USER CODE END 0 */
 
@@ -86,14 +159,6 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
-  volatile uint16_t adc_buffer[4];     // 加 volatile
-
-  // 传感器
-  #define LINE_A  adc_buffer[0]   // PA0 - 最左
-  #define LINE_B  adc_buffer[1]   // PA1
-  #define LINE_C  adc_buffer[2]   // PA3
-  #define LINE_D  adc_buffer[3]   // PB0 - 最右
-
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -105,26 +170,87 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buffer, 4);
+  /* 校准必须在 DMA 启动之前完成 */
+  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_buf, 4);
+
+  /* 启动 PWM 输出通道 */
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-  volatile uint16_t adc_value[4];
-  float data[4];
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc_value, 4);
-
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
+    /*
+     * 读取四路传感器并二值化：1 = 检测到黑线，0 = 白色地面
+     *
+     * 传感器排列（从左到右）：
+     *   sL   sML   sMR   sR
+     *   PA0  PA1   PA3   PB0
+     */
+    uint8_t sL  = (adc_buf[0] > BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sML = (adc_buf[1] > BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sMR = (adc_buf[2] > BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sR  = (adc_buf[3] > BLACK_THRESHOLD) ? 1 : 0;
+
+    /* 将四路状态编码为 4 位值 [sL sML sMR sR] */
+    uint8_t st = (sL << 3) | (sML << 2) | (sMR << 1) | sR;
+
+    switch (st)
+    {
+      /* 直行：中间两路（或更多）在线 */
+      case 0x06: /* 0110 */
+      case 0x07: /* 0111 */
+      case 0x0E: /* 1110 */
+      case 0x0F: /* 1111 */
+        Motor_Drive(SPEED_BASE, SPEED_BASE);
+        break;
+
+      /* 线偏右，小车需右转：左轮快，右轮慢 */
+      case 0x02: /* 0010 仅 sMR */
+      case 0x03: /* 0011 sMR + sR */
+        Motor_Drive(SPEED_FAST, SPEED_SLOW);
+        break;
+
+      /* 线严重偏右，急右转：左轮全速，右轮反转 */
+      case 0x01: /* 0001 仅 sR */
+        Motor_Drive(SPEED_FAST, -SPEED_SPIN);
+        break;
+
+      /* 线偏左，小车需左转：右轮快，左轮慢 */
+      case 0x04: /* 0100 仅 sML */
+      case 0x0C: /* 1100 sL + sML */
+        Motor_Drive(SPEED_SLOW, SPEED_FAST);
+        break;
+
+      /* 线严重偏左，急左转：右轮全速，左轮反转 */
+      case 0x08: /* 1000 仅 sL */
+        Motor_Drive(-SPEED_SPIN, SPEED_FAST);
+        break;
+
+      /* 仅两侧传感器触线（T 形路口或终点）：保持直行 */
+      case 0x09: /* 1001 */
+        Motor_Drive(SPEED_BASE, SPEED_BASE);
+        break;
+
+      /* 无传感器触线（丢线）：低速直行等待重新找线 */
+      case 0x00:
+      default:
+        Motor_Drive(SPEED_BASE / 2, SPEED_BASE / 2);
+        break;
+    }
+
+    HAL_Delay(10);
+
+    /* USER CODE END 3 */
   }
-  /* USER CODE END 3 */
 }
 
 /**

@@ -1,0 +1,17 @@
+19:57:25 **** Incremental Build of configuration Debug for project Ltika_test ****
+make -j8 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F303x8 -c -I../Core/Inc -I../Drivers/STM32F3xx_HAL_Driver/Inc -I../Drivers/STM32F3xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F3xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
+arm-none-eabi-gcc -o "Ltika_test.elf" @"objects.list"   -mcpu=cortex-m4 -T"C:\code\xioache\Ltika_test\STM32F303K8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Ltika_test.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: Ltika_test.elf
+ 
+arm-none-eabi-size  Ltika_test.elf 
+arm-none-eabi-objdump -h -S Ltika_test.elf  > "Ltika_test.list"
+   text	   data	    bss	    dec	    hex	filename
+  36336	    468	   2348	  39152	   98f0	Ltika_test.elf
+Finished building: default.size.stdout
+ 
+Finished building: Ltika_test.list
+ 
+
+19:57:27 Build Finished. 0 errors, 0 warnings. (took 1s.785ms)
+
