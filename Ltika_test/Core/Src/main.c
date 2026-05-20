@@ -45,10 +45,11 @@
 #define BLACK_THRESHOLD  2000
 
 /* 电机 PWM 速度（0 ~ 1000，对应 TIM1 Period = 1000） */
-#define SPEED_BASE   650    /* 直行速度            */
-#define SPEED_FAST   850    /* 转弯时外侧轮速度     */
-#define SPEED_SLOW   150    /* 转弯时内侧轮速度     */
-#define SPEED_SPIN   500    /* 急转弯原地旋转速度   */
+#define SPEED_BASE   600    /* 直行速度                          */
+#define SPEED_TRIM    80    /* 轻微偏差修正幅度（base ± TRIM）    */
+#define SPEED_FAST   750    /* 中度转弯外侧轮速度                 */
+#define SPEED_SLOW   200    /* 中度转弯内侧轮速度                 */
+#define SPEED_SPIN   450    /* 急转弯反转速度                     */
 
 /* USER CODE END PD */
 
@@ -205,42 +206,50 @@ int main(void)
 
     switch (st)
     {
-      /* 直行：中间两路（或更多）在线 */
-      case 0x06: /* 0110 */
-      case 0x07: /* 0111 */
-      case 0x0E: /* 1110 */
-      case 0x0F: /* 1111 */
+      /* ── 直行：中间两路都压线 ── */
+      case 0x06: /* 0110 sML+sMR         */
+      case 0x07: /* 0111 sML+sMR+sR      */
+      case 0x0E: /* 1110 sL+sML+sMR      */
+      case 0x0F: /* 1111 全部             */
         Motor_Drive(SPEED_BASE, SPEED_BASE);
         break;
 
-      /* 线偏右，小车需右转：左轮快，右轮慢 */
-      case 0x02: /* 0010 仅 sMR */
-      case 0x03: /* 0011 sMR + sR */
+      /* ── 轻微右偏（仅 sMR 压线）：小幅左转修正 ── */
+      case 0x02: /* 0010 */
+        Motor_Drive(SPEED_BASE + SPEED_TRIM, SPEED_BASE - SPEED_TRIM);
+        break;
+
+      /* ── 明显右偏（sMR + sR 压线）：中度左转 ── */
+      case 0x03: /* 0011 */
         Motor_Drive(SPEED_FAST, SPEED_SLOW);
         break;
 
-      /* 线严重偏右，急右转：左轮全速，右轮反转 */
-      case 0x01: /* 0001 仅 sR */
+      /* ── 严重右偏（仅 sR 压线）：急左转 ── */
+      case 0x01: /* 0001 */
         Motor_Drive(SPEED_FAST, -SPEED_SPIN);
         break;
 
-      /* 线偏左，小车需左转：右轮快，左轮慢 */
-      case 0x04: /* 0100 仅 sML */
-      case 0x0C: /* 1100 sL + sML */
+      /* ── 轻微左偏（仅 sML 压线）：小幅右转修正 ── */
+      case 0x04: /* 0100 */
+        Motor_Drive(SPEED_BASE - SPEED_TRIM, SPEED_BASE + SPEED_TRIM);
+        break;
+
+      /* ── 明显左偏（sL + sML 压线）：中度右转 ── */
+      case 0x0C: /* 1100 */
         Motor_Drive(SPEED_SLOW, SPEED_FAST);
         break;
 
-      /* 线严重偏左，急左转：右轮全速，左轮反转 */
-      case 0x08: /* 1000 仅 sL */
+      /* ── 严重左偏（仅 sL 压线）：急右转 ── */
+      case 0x08: /* 1000 */
         Motor_Drive(-SPEED_SPIN, SPEED_FAST);
         break;
 
-      /* 仅两侧传感器触线（T 形路口或终点）：保持直行 */
+      /* ── T 形路口 / 终点（两侧触线）：直行通过 ── */
       case 0x09: /* 1001 */
         Motor_Drive(SPEED_BASE, SPEED_BASE);
         break;
 
-      /* 无传感器触线（丢线）：低速直行等待重新找线 */
+      /* ── 丢线：低速直行等待重新找线 ── */
       case 0x00:
       default:
         Motor_Drive(SPEED_BASE / 2, SPEED_BASE / 2);
