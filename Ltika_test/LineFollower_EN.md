@@ -61,13 +61,15 @@ Left               Right
 
 | State (binary) | Meaning | Left PWM | Right PWM | Action |
 |---------------|---------|---------|----------|--------|
-| `0110` `0111` `1110` `1111` | Centered | 650 | 650 | Go straight |
-| `0010` `0011` | Line shifted right | 850 | 150 | Turn right |
-| `0001` | Line far right | 850 | −500 | Sharp right spin |
-| `0100` `1100` | Line shifted left | 150 | 850 | Turn left |
-| `1000` | Line far left | −500 | 850 | Sharp left spin |
-| `1001` | T-junction / end of line | 650 | 650 | Continue straight |
-| `0000` | Line lost | 325 | 325 | Slow forward — search for line |
+| `0110` `0111` `1110` `1111` | Centered | 600 | 600 | Go straight |
+| `0010` | Slight right drift (sMR only) | 680 | 520 | Gentle left correction |
+| `0011` | Noticeable right drift (sMR+sR) | 750 | 200 | Moderate left turn |
+| `0001` | Hard right drift (sR only) | 750 | −450 | Sharp left spin |
+| `0100` | Slight left drift (sML only) | 520 | 680 | Gentle right correction |
+| `1100` | Noticeable left drift (sL+sML) | 200 | 750 | Moderate right turn |
+| `1000` | Hard left drift (sL only) | −450 | 750 | Sharp right spin |
+| `1001` | T-junction / end of line | 600 | 600 | Continue straight |
+| `0000` | Line lost | 300 | 300 | Slow forward — search for line |
 
 ---
 
@@ -76,10 +78,11 @@ Left               Right
 | Macro | Default | Description |
 |-------|---------|-------------|
 | `BLACK_THRESHOLD` | 2000 | ADC threshold (0–4095). Above this value = black line |
-| `SPEED_BASE` | 650 | Straight-line speed |
-| `SPEED_FAST` | 850 | Outer wheel speed during a turn |
-| `SPEED_SLOW` | 150 | Inner wheel speed during a turn |
-| `SPEED_SPIN` | 500 | Reverse speed of inner wheel during a sharp spin turn |
+| `SPEED_BASE` | 600 | Straight-line speed |
+| `SPEED_TRIM` | 80 | Gentle correction magnitude; actual speed = `base ± TRIM`. Reduce if oscillation occurs on straight lines |
+| `SPEED_FAST` | 750 | Outer wheel speed during a moderate turn |
+| `SPEED_SLOW` | 200 | Inner wheel speed during a moderate turn |
+| `SPEED_SPIN` | 450 | Reverse speed of inner wheel during a sharp spin turn |
 
 ---
 
