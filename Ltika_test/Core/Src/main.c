@@ -38,9 +38,8 @@
 /* USER CODE BEGIN PD */
 
 /*
- * ADC 阈值：高于此值 = 感光管检测到黑线
- * 典型 TCRT5000 上拉电路：黑色吸收红外 → 光电管截止 → 集电极高电平 → 高 ADC 值
- * 若实际极性相反（白线返回高值），将比较方向改为 <
+ * ADC 阈值：低于此值 = 感光管检测到黑线
+ * 实际电路：白线反射红外 → 光电管导通 → 高 ADC 值；黑线吸收红外 → 截止 → 低 ADC 值
  */
 #define BLACK_THRESHOLD  2000
 
@@ -196,10 +195,10 @@ int main(void)
      *   sL   sML   sMR   sR
      *   PA0  PA1   PA3   PB0
      */
-    uint8_t sL  = (adc_buf[0] > BLACK_THRESHOLD) ? 1 : 0;
-    uint8_t sML = (adc_buf[1] > BLACK_THRESHOLD) ? 1 : 0;
-    uint8_t sMR = (adc_buf[2] > BLACK_THRESHOLD) ? 1 : 0;
-    uint8_t sR  = (adc_buf[3] > BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sL  = (adc_buf[0] < BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sML = (adc_buf[1] < BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sMR = (adc_buf[2] < BLACK_THRESHOLD) ? 1 : 0;
+    uint8_t sR  = (adc_buf[3] < BLACK_THRESHOLD) ? 1 : 0;
 
     /* 将四路状态编码为 4 位值 [sL sML sMR sR] */
     uint8_t st = (sL << 3) | (sML << 2) | (sMR << 1) | sR;
