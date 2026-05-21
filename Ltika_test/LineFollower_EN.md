@@ -45,8 +45,9 @@ HAL_TIM_PWM_Start(CH2)          ← enable right wheel PWM output
 ### Sensor Thresholding
 
 ```c
-uint8_t s = (adc_buf[i] > BLACK_THRESHOLD) ? 1 : 0;
+uint8_t s = (adc_buf[i] < BLACK_THRESHOLD) ? 1 : 0;
 // 1 = black line detected, 0 = white surface
+// Circuit: white reflects IR → high ADC; black absorbs IR → low ADC
 ```
 
 The four sensor readings are encoded as a 4-bit value `[sL  sML  sMR  sR]`:
@@ -77,12 +78,13 @@ Left               Right
 
 | Macro | Default | Description |
 |-------|---------|-------------|
-| `BLACK_THRESHOLD` | 2000 | ADC threshold (0–4095). Above this value = black line |
+| `BLACK_THRESHOLD` | 2000 | ADC threshold (0–4095). Below this value = black line (current circuit: black absorbs IR → low ADC) |
 | `SPEED_BASE` | 600 | Straight-line speed |
 | `SPEED_TRIM` | 80 | Gentle correction magnitude; actual speed = `base ± TRIM`. Reduce if oscillation occurs on straight lines |
 | `SPEED_FAST` | 750 | Outer wheel speed during a moderate turn |
 | `SPEED_SLOW` | 200 | Inner wheel speed during a moderate turn |
 | `SPEED_SPIN` | 450 | Reverse speed of inner wheel during a sharp spin turn |
+| `HAL_Delay` | **5 ms** | Main loop delay; sets the control frequency (currently 200 Hz). Lower = faster response; 2 ms is the recommended minimum |
 
 ---
 
@@ -91,14 +93,12 @@ Left               Right
 ### Robot turns in the wrong direction
 Swap the two arguments in the `Motor_Drive` call, or invert the `xIN1`/`xIN2` logic for the affected motor inside `Motor_Drive`.
 
-### Sensor polarity is inverted (white surface returns a high ADC value)
-Change the comparison operator in `main.c` from `>` to `<`:
+### Sensor polarity is inverted (black line returns a high ADC value)
+The current code uses `<`, which matches a circuit where black = low ADC. If using a pull-up circuit (black line cuts off the transistor → collector pulled high → high ADC), change the operator back to `>`:
 
 ```c
-// Before
+// Pull-up circuit (black line = high ADC)
 uint8_t sL = (adc_buf[0] > BLACK_THRESHOLD) ? 1 : 0;
-// After
-uint8_t sL = (adc_buf[0] < BLACK_THRESHOLD) ? 1 : 0;
 ```
 
 ### Robot overshoots and leaves the track at speed
