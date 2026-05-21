@@ -256,7 +256,7 @@ int main(void)
         break;
     }
 
-    HAL_Delay(10);
+    HAL_Delay(5);
 
     /* USER CODE END 3 */
   }
